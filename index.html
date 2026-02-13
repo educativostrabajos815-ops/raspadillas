@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>POS El Norteño v12.1 (Sync Fix)</title>
+    <title>POS El Norteño v12.6 (Bug Fix)</title>
     
     <!-- PWA Config -->
     <link rel="manifest" href="manifest.json">
@@ -31,8 +31,8 @@
         .modal.open .modal-content { transform: translateY(0); }
         
         /* Loading Overlay */
-        #loading-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: #0f172a; z-index: 999; display: flex; flex-col: column; justify-content: center; align-items: center; color: white; transition: opacity 0.5s; }
-        .spinner { border: 4px solid rgba(255,255,255,0.3); width: 40px; height: 40px; border-radius: 50%; border-left-color: #fbbf24; animation: spin 1s linear infinite; margin-bottom: 10px; }
+        #loading-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: #0f172a; z-index: 999; display: flex; flex-col: column; justify-content: center; align-items: center; color: white; transition: opacity 0.5s; padding: 20px; text-align: center; }
+        .spinner { border: 4px solid rgba(255,255,255,0.3); width: 40px; height: 40px; border-radius: 50%; border-left-color: #fbbf24; animation: spin 1s linear infinite; margin-bottom: 10px; display: inline-block; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         /* Botones */
@@ -62,14 +62,28 @@
         /* Toast */
         #toast-box { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: white; padding: 12px 24px; border-radius: 30px; z-index: 200; opacity: 0; pointer-events: none; transition: all 0.3s; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); white-space: nowrap; }
         #toast-box.show { opacity: 1; transform: translateX(-50%) translateY(-10px); }
+        
+        /* Error Box */
+        #error-box { display: none; background: #ef4444; color: white; padding: 15px; border-radius: 10px; margin-top: 20px; font-size: 12px; text-align: left; }
     </style>
 </head>
 <body class="light">
 
-    <!-- PANTALLA DE CARGA -->
+    <!-- PANTALLA DE CARGA / ERROR -->
     <div id="loading-screen">
-        <div class="spinner"></div>
+        <div class="spinner" id="spinner"></div>
         <p class="text-sm font-bold tracking-widest text-center px-4" id="loading-text">CONECTANDO...</p>
+        
+        <div id="error-box">
+            <p class="font-bold text-lg mb-2">⚠️ ERROR DE CONEXIÓN</p>
+            <p class="mb-2">Firebase ha bloqueado la conexión desde este sitio.</p>
+            <p class="mb-1">Debes autorizar este dominio:</p>
+            <p class="bg-black/20 p-2 rounded font-mono text-yellow-300 select-all mb-4" id="current-domain">...</p>
+            <p>1. Ve a <b>Firebase Console > Authentication > Settings</b>.</p>
+            <p>2. Baja a <b>Authorized Domains</b>.</p>
+            <p>3. Agrega el dominio de arriba.</p>
+            <button onclick="location.reload()" class="mt-4 bg-white text-red-600 px-4 py-2 rounded font-bold w-full">Ya lo hice, RECARGAR</button>
+        </div>
     </div>
 
     <!-- TOAST -->
@@ -80,7 +94,7 @@
         <div class="flex items-center gap-2">
             <div>
                 <h1 class="font-bold text-lg text-yellow-400 tracking-tight"><i class="fas fa-crown text-green-500 mr-2 text-xs"></i>El Norteño</h1>
-                <p class="text-[10px] text-gray-400">v12.1 Sync Fix</p>
+                <p class="text-[10px] text-gray-400">v12.6 Bug Fix</p>
             </div>
         </div>
         <div class="flex items-center gap-3">
@@ -232,16 +246,14 @@
             </div>
             <label class="block text-[10px] font-bold text-gray-500 mb-1">¿Quién pagó?</label>
             <select id="gasto-quien" class="w-full border p-1 rounded text-xs mb-2 bg-gray-50">
-                <option value="caja">Caja / Efectivo (Restar de Caja)</option>
-                <option value="diego">Diego (De su bolsillo - Reembolsar)</option>
-                <option value="jhonatan">Jhonatan (De su bolsillo - Reembolsar)</option>
+                <option value="caja">Caja / Efectivo</option>
+                <option value="diego">Diego (De su bolsillo)</option>
+                <option value="jhonatan">Jhonatan (De su bolsillo)</option>
             </select>
             <button onclick="agregarGasto()" class="w-full bg-orange-600 text-white py-2 rounded font-bold text-xs hover:bg-orange-700 shadow-sm"> + AGREGAR GASTO</button>
             
             <!-- LISTA DE GASTOS DEL DÍA CON BOTÓN ELIMINAR -->
-            <ul id="lista-gastos" class="mt-4 text-xs text-gray-600 space-y-2 border-t pt-2">
-                <!-- Se llena dinámicamente -->
-            </ul>
+            <ul id="lista-gastos" class="mt-4 text-xs text-gray-600 space-y-2 border-t pt-2"></ul>
         </div>
 
         <div class="grid grid-cols-2 gap-2 mb-4">
@@ -257,7 +269,7 @@
             <i class="fas fa-file-excel text-lg"></i> ENVIAR A EXCEL
         </button>
 
-        <a href="https://docs.google.com/spreadsheets/d/1tuIovf6Z09QfI2oOfKBvbf_k0YvMW6cqrVLRUmWHNCU/edit?gid=0#gid=0" target="_blank" class="w-full bg-white text-green-700 border-2 border-green-600 py-3 rounded-xl font-bold text-xs shadow flex flex-col items-center justify-center gap-2 mb-4 hover:bg-green-50 block text-center decoration-0">
+        <a href="https://docs.google.com/spreadsheets/d/1tuIovf6Z09QfI2oOfKBvbf_k0YvMW6cqrVLRUmWHNCU/edit?gid=0#gid=0" target="_blank" id="btn-ver-excel" class="w-full bg-white text-green-700 border-2 border-green-600 py-3 rounded-xl font-bold text-xs shadow flex flex-col items-center justify-center gap-2 mb-4 hover:bg-green-50 block text-center decoration-0">
             <i class="fas fa-external-link-alt text-lg"></i> VER GOOGLE SHEET
         </a>
 
@@ -491,7 +503,7 @@
         </div>
     </div>
 
-    <!-- LOGICA APP v12.1 -->
+    <!-- LOGICA APP v12.6 -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, doc, onSnapshot, setDoc, collection, getDocs, updateDoc, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -547,6 +559,10 @@
                 if (!auth.currentUser) await signInAnonymously(auth);
                 startDataListener();
             } catch (error) {
+                if(error.code === 'auth/unauthorized-domain') {
+                    document.getElementById('error-box').style.display = 'block';
+                    document.getElementById('current-domain').innerText = window.location.hostname;
+                }
                 startDataListener(); 
                 if(loading) loading.style.display = 'none';
             }
@@ -624,7 +640,6 @@
                 const snapG = await getDocs(gastosGlobalesCol);
                 snapG.forEach(doc => { globalExpenses.push({ ...doc.data(), id: doc.id }); });
 
-                // 3. Merge Today
                 const d = new Date();
                 const hoyStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                 const txsHoy = Array.isArray(data.transacciones) ? data.transacciones : Object.values(data.transacciones||{});
@@ -701,13 +716,60 @@
             } catch(e) { alert("Error: " + e.message); }
         }
         
-        window.agregarInversionDirecta = async () => {
-            if(!confirm("¿Registrar inversión inicial de S/ 288.50?")) return;
-            try {
-                await addDoc(gastosGlobalesCol, { desc: "Inversión Inicial", monto: 288.50, fecha: new Date().toISOString() });
-                calcFinanzas('mes');
-                showToast("Inversión registrada");
-            } catch(e) { alert(e.message); }
+        window.importarInversion = (input) => {
+            const file = input.files[0];
+            if(!file) return;
+            
+            const processText = (text) => {
+                const rows = text.split(/\r\n|\n/);
+                let found = false;
+                for(let row of rows) {
+                    if(row.toUpperCase().includes('TOTAL') && (row.toUpperCase().includes('INVERSION') || row.toUpperCase().includes('INVERSIÓN'))) {
+                        let cleanRow = row.replace(/;/g, ',');
+                        let cols = cleanRow.split(',');
+                        let amount = 0;
+                        for(let i=1; i<cols.length; i++) {
+                            let valStr = cols[i].trim().replace(',', '.'); 
+                            let val = parseFloat(valStr);
+                            if(val && val > 0) {
+                                amount = val;
+                                break;
+                            }
+                        }
+                        if(amount) {
+                            found = true;
+                            if(confirm(`Encontrada Inversión: S/ ${amount.toFixed(2)}\n¿Registrar en Finanzas?`)) {
+                                addDoc(gastosGlobalesCol, { 
+                                    desc: "Inversión Inicial (Importada)", 
+                                    monto: amount, 
+                                    pagadoPor: 'ambos', 
+                                    fecha: new Date().toISOString() 
+                                }).then(() => {
+                                    calcFinanzas('mes');
+                                    showToast("✅ Inversión guardada");
+                                });
+                            }
+                            return true; 
+                        }
+                    }
+                }
+                return false;
+            };
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result;
+                if(!processText(text)) {
+                    const reader2 = new FileReader();
+                    reader2.onload = (e2) => {
+                        if(!processText(e2.target.result)) {
+                             alert("❌ No se encontró la fila 'INVERSIÓN TOTAL' o el monto.\n\nAsegúrate que el archivo CSV tenga una fila que diga 'INVERSIÓN TOTAL' y el monto al lado.");
+                        }
+                    };
+                    reader2.readAsText(file, 'ISO-8859-1');
+                }
+            };
+            reader.readAsText(file); 
         }
 
         // --- RENDERIZADORES ---
@@ -818,7 +880,8 @@
             
             document.getElementById('caja-efectivo').innerText = `S/ ${efectivo.toFixed(2)}`;
             document.getElementById('caja-yape').innerText = `S/ ${yape.toFixed(2)}`;
-            document.getElementById('caja-plin').innerText = `S/ ${plin.toFixed(2)}`;
+            // FIX: Removed plin element reference since it was removed from HTML
+            // document.getElementById('caja-plin').innerText = `S/ ${plin.toFixed(2)}`;
             
             document.getElementById('caja-gastos').innerText = `S/ ${totalGastos.toFixed(2)}`;
             document.getElementById('caja-neta').innerText = `S/ ${neto.toFixed(2)}`;
@@ -993,7 +1056,7 @@
              if(txIndex === -1) return;
              const tx = data.transacciones[txIndex];
              // Stock adjust
-             if(tx.prod !== newProdId) { 
+             if(tx.prod !== newProdId && tx.prod !== 'libre') { 
                  if(data.stock[tx.prod] !== undefined) data.stock[tx.prod]++; 
                  if(data.stock[newProdId] !== undefined) data.stock[newProdId]--; 
              }
@@ -1043,7 +1106,7 @@
         window.delProd = (index) => { if(confirm("¿Borrar?")) { data.productos.splice(index, 1); guardarEnNube(); window.abrirConfig(); } }
         window.crearProducto = () => { const name = document.getElementById('new-prod-name').value; const price = parseFloat(document.getElementById('new-prod-price').value); const desc = document.getElementById('new-prod-desc').value; if(name && price) { const id = name.toLowerCase().replace(/\s/g, '_') + Date.now().toString().slice(-4); data.productos.push({ id, name, price, desc, color: 'blue' }); data.stock[id] = 0; guardarEnNube(); window.abrirConfig(); document.getElementById('new-prod-name').value = ''; } }
         
-        window.nav = (viewId) => { document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active')); document.getElementById(viewId).classList.add('active'); ['nav-pos', 'nav-pedidos', 'nav-almacen', 'nav-caja', 'nav-analisis', 'nav-finanzas'].forEach(id => { const el = document.getElementById(id); if(el) el.classList.remove('text-blue-600'); }); const navBtn = document.getElementById(viewId.replace('view-','nav-')); if(navBtn) navBtn.classList.add('text-blue-600'); }
+        window.nav = (viewId) => { document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active')); document.getElementById(viewId).classList.add('active'); ['nav-pos', 'nav-pedidos', 'nav-almacen', 'nav-caja', 'nav-analisis'].forEach(id => { const el = document.getElementById(id); if(el) el.classList.remove('text-blue-600'); }); const navBtn = document.getElementById(viewId.replace('view-','nav-')); if(navBtn) navBtn.classList.add('text-blue-600'); }
         window.toggleQR = () => document.getElementById('qr-section').classList.toggle('hidden');
         window.guardarImagenQR = (input) => { if (input.files && input.files[0]) { const r = new FileReader(); r.onload = (e) => { data.qrImage = e.target.result; mostrarQR(data.qrImage); guardarEnNube(); }; r.readAsDataURL(input.files[0]); } }
         function mostrarQR(src) { const img = document.getElementById('img-qr-display'); img.src = src; img.classList.remove('hidden'); document.getElementById('qr-placeholder').classList.add('hidden'); document.getElementById('qr-section').classList.remove('hidden'); }
@@ -1111,7 +1174,7 @@
             transacciones.forEach(tx => { const sabs = tx.sabor.split(' + '); sabs.forEach(s => ranking[s] = (ranking[s] || 0) + 1); totalItems++; });
             const top = Object.entries(ranking).sort((a,b) => b[1] - a[1]);
             
-            // Generate Chart Data
+            // Generate Chart Data for History
             const chartData = {};
             transacciones.forEach(tx => {
                 const date = new Date(tx.id || Date.now());
@@ -1143,14 +1206,16 @@
 
         window.importarDatosAntiguos = async () => { if(!confirm("¿Importar respaldo?")) return; try { if(!auth.currentUser) await signInAnonymously(auth); const d1 = { transacciones: [{ id: 1770100000000, precio: 42, prod: "varios", sabor: "Resumen Fresa (Importado)" }], gastos: [], mermas: [], stock: { normal: 28, grande: 51, bodoque: 0 }, precios: { bodoque: 1.5, normal: 2, grande: 3.5 }, fecha_guardado: "2026-02-03T23:00:00.000Z" }; await setDoc(doc(historyCol, "2026-02-03"), d1); const d2 = { transacciones: [{ id: 1769600000000, precio: 44, prod: "normal", sabor: "Resumen (20 unids)" }], gastos: [{ desc: "Buena acción", monto: 2 }], mermas: [{ prod: "normal", cant: 1, motivo: "Se cayó" }], stock: { normal: 27, grande: 48, bodoque: 0 }, precios: { bodoque: 1.5, normal: 2, grande: 3.5 }, fecha_guardado: "2026-01-28T23:00:00.000Z" }; await setDoc(doc(historyCol, "2026-01-28"), d2); alert("✅ Datos importados."); verHistorial(); } catch(e) { alert("❌ Error: " + e.message); } }
         window.enviarAExcel = async () => { const btn = document.getElementById('btn-excel'); btn.innerHTML = 'Enviando...'; btn.disabled = true; setTimeout(() => { alert("Enviado al Script (Simulado - Configura URL)"); btn.disabled=false; btn.innerHTML='ENVIAR EXCEL';}, 1000); }
-        window.abrirHojaCalculo = () => { window.open(EXCEL_VIEW_URL, '_blank'); }
+        window.abrirHojaCalculo = () => { window.open("https://docs.google.com/spreadsheets/d/1tuIovf6Z09QfI2oOfKBvbf_k0YvMW6cqrVLRUmWHNCU/edit?gid=0#gid=0", '_blank'); }
         window.cerrarDia = async () => { if(!confirm("¿Cerrar Caja?")) return; const d = new Date(); const hoy = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; const cleanData = { ...data, qrImage: null, fecha_guardado: new Date().toISOString() }; try { if(!auth.currentUser) await signInAnonymously(auth); await setDoc(doc(historyCol, hoy), cleanData); data.transacciones = []; data.gastos = []; data.mermas = []; await guardarEnNube(); alert("✅ Cerrado"); location.reload(); } catch(e) { alert(e.message); } }
     </script>
     
     <script>
-        if ('serviceWorker' in navigator) {
+        // DESACTIVAR SW TEMPORALMENTE PARA EVITAR ERROR DE CONSOLA
+        /* if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(err => console.log('Fallo SW:', err)); });
-        }
+        } 
+        */
     </script>
 </body>
 </html>
